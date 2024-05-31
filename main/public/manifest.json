@@ -1,0 +1,23 @@
+{
+  "name": "Skibidi-Chat",
+  "description": "Chatroom Chrome extension",
+  "version": "1.0",
+  "manifest_version": 3,
+  "action": {
+      "default_title": "Skibidi-Chat"
+  },
+  "side_panel":{
+    "default_path":"index.html"
+  },
+  "background":{
+    "service_worker":"service-worker.js"
+  },
+  "permissions":[
+    "sidePanel"
+  ],
+  "icons": {
+      "16": "logo192.png",
+      "48": "logo192.png",
+      "128": "logo192.png"
+  }
+}
