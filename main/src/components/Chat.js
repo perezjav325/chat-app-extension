@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { addDoc, collection, serverTimestamp, onSnapshot, query, where, orderBy, limit} from 'firebase/firestore';
 import { auth, db } from "../firebase-config";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faGear } from '@fortawesome/free-solid-svg-icons';
+import { faGear, faRightFromBracket } from '@fortawesome/free-solid-svg-icons';
 import '../styles/Chat.css';
 
 export const Chat = (props) => {
@@ -73,7 +73,7 @@ export const Chat = (props) => {
         <div className="chat-app">
         <div className="header">
         <FontAwesomeIcon onClick={settingsClick} className="gear-icon" icon={faGear}/>
-        <button className="leave-room-button" onClick={leaveRoomClick}> Leave Room</button>
+        <FontAwesomeIcon onClick={leaveRoomClick} className="leave-room-button" icon={faRightFromBracket} flip="horizontal" />
         <h1>{room}</h1>
         </div>
         <div className="messages" id="msg_box"> 

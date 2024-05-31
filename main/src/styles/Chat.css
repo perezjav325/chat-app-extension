@@ -85,12 +85,8 @@
   .leave-room-button{
     float: right;
     margin-right: 10px;
-    background-color: transparent;
     color: white;
-    border: none;
-    outline: none;
-    font-size: 12px;
-    font-weight: bold;
+    font-size: 16px;
   }
 
   .leave-room-button:hover{
@@ -106,4 +102,7 @@
     border-right: #333;
     border-width: 1px;
     border-color: white;
+  }
+  .send-button:hover{
+    background-color: #7dba22;
   }
