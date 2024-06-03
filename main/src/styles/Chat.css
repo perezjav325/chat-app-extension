@@ -13,15 +13,29 @@
     background-color: #000;
     color: #adff2f;
     padding-top: 5px;
-    padding-inline-start: 10px;
+    text-align: center;
     width: 100%
   }
 
   .gear-icon {
     font-size: 16px;
     float: right;
-    margin-right: 3%;
+    margin-right: 10px;
+    margin-left: 5px;
     color: white;
+  }
+  .gear-icon:hover{
+    color: greenyellow;
+  }
+
+  .caret-up{
+    float: right;
+    color: white;
+    font-size: 16px;
+    margin-right: 12px;
+  }
+  .caret-up:hover{
+    color: greenyellow;
   }
 
   .messages {
@@ -84,7 +98,6 @@
   }
   .leave-room-button{
     float: right;
-    margin-right: 10px;
     color: white;
     font-size: 16px;
   }

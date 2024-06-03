@@ -9,13 +9,11 @@
 
 input[type="text"] {
   color: white;
-  background: transparent;
+  background: gray;
   outline: none;
-  border-width: thin;
-  border-style: solid;
-  border-left: none;
-  border-top: none;
-  border-right: none;
+  border:inset;
+  border-color: #333;
+  border-radius: 5px;
 }
 
 .form {
@@ -27,13 +25,24 @@ input[type="text"] {
 }
 
 .form-header {
+  padding-top: 5px;
+  padding-bottom: 5px;
   text-align: center;
   background-color: black;
   color: greenyellow;
   width: 100%;
 }
+#main.form-header{
+  height: 100px;
+}
 
-.name-label {
+.name-label{
+  margin-bottom: 5px;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.entry-form {
   margin-top: 10px;
   margin-bottom: 5px;
   display: flex;
@@ -41,7 +50,6 @@ input[type="text"] {
   align-self: start;
   padding-left: 10px;
   width: 35%;
-  font-weight: 500;
   color: white;
 }
 
@@ -61,6 +69,18 @@ input[type="text"] {
 
 .enter-button:hover{
   background-color: #acff2fb9;
+}
+
+.settings-top{
+  margin-left: 12px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: bold;
+}
+.settings-content{
+  text-align: center;
+  transform: translateY(25px);
+  color: white;
 }
 
 @media (prefers-reduced-motion: no-preference) {
