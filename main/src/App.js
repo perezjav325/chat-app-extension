@@ -2,10 +2,10 @@ import React, { useState, useRef } from "react";
 import './styles/App.css';
 import Cookies from 'universal-cookie';
 import { Chat } from "./components/Chat";
-import { signOut } from "firebase/auth";
-import { auth } from "./firebase-config";
+import { db } from "./firebase-config";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGear, faCaretUp } from '@fortawesome/free-solid-svg-icons';
+import { addDoc, collection, deleteDoc, doc, getDoc, setDoc } from "firebase/firestore";
 export const cookies = new Cookies();
 
 
@@ -20,6 +20,8 @@ function App() {
 
   const [room, setRoom] = useState(checkCookie(1));
   const [name, setName] = useState(checkCookie(0));
+  const roomsRef = collection(db, "rooms");
+  const [roomRef, setRoomRef] = useState(cookies.get("roomRef"));
 
   const [settings, setSettings] = useState("none");
 
@@ -27,17 +29,24 @@ function App() {
   const nameInputRef = useRef(null);
 
   const signUserOut = async () => {
-    await signOut(auth);
+    await deleteDoc(doc(db,"rooms",room));
     cookies.remove("user-room");
     setIsInRoom(false);
     setRoom(null);
   }
 
-  const enterRoom = () => {
+  const enterRoom = async() => {
     if (roomInputRef.current.value == "" || nameInputRef.current.value == "") return;
+    setRoomRef(doc(db, "rooms", roomInputRef.current.value));
+    const docRef = doc(db,"rooms", roomInputRef.current.value);
+    if((await getDoc(docRef)).exists){
+      console.log("EXISTS");
+    }
+    await setDoc(doc(roomsRef, roomInputRef.current.value),{});
     setRoom(roomInputRef.current.value);
     setName(nameInputRef.current.value);
     setIsInRoom(true);
+    cookies.set("roomRef", roomRef);
     cookies.set("user-room", nameInputRef.current.value + "-" + roomInputRef.current.value);
   }
 
@@ -53,7 +62,7 @@ function App() {
   }
 
   return <div>
-    {isInRoom ? <Chat room={room} name={name} sign_out={signUserOut} /> :
+    {isInRoom ? <Chat room={room} name={name} roomRef={roomRef} sign_out={signUserOut} /> :
 
       <div className="form">
         {settings === "none" ?

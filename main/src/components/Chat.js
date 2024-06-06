@@ -1,54 +1,92 @@
 import { useEffect, useState } from "react";
-import { addDoc, collection, serverTimestamp, onSnapshot, query, where, orderBy, limit } from 'firebase/firestore';
-import { auth, db } from "../firebase-config";
+import { writeBatch, addDoc, collection, serverTimestamp, onSnapshot, query, where, orderBy, limit, getDocs, } from 'firebase/firestore';
+import { db } from "../firebase-config";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGear, faRightFromBracket, faCaretUp } from '@fortawesome/free-solid-svg-icons';
 import '../styles/Chat.css';
+import { cookies } from "../App";
+import { set } from "firebase/database";
 
 export const Chat = (props) => {
     const { room } = props;
     const { name } = props;
     const { sign_out } = props;
-
-    const messagesRef = collection(db, "messages");
+    const { roomRef } = props;
+    
+   
+    const msgsRef = collection(db, `rooms/${room}/msgs`);
     const [newMessage, setNewMessage] = useState("");
     const [messages, setMessages] = useState([]);
+    let x = [];
 
     const delay = ms => new Promise(res => setTimeout(res, ms));
 
     const [settings, setSettings] = useState("none");
-
-    useEffect(() => {
-        const queryMessages = query(messagesRef, where("room", "==", room), orderBy("createdAt", "desc"), limit(100));
+    const queryMessages = query(msgsRef, where("name", "!=", name), orderBy("createdAt", "desc"), limit(1));
+    useEffect( () => {
         const unsubscribe = onSnapshot(queryMessages, async (snapshot) => {
-            let msgs = [];
-            snapshot.forEach((doc) => {
-                msgs.push({ ...doc.data(), id: doc.id })
-            });
+                const doc = snapshot.docs[0];
+                
+                if(doc.data().createdAt == null){return;}
+                if(!x.includes(doc)){
+                    x.unshift({ ...doc.data(), id: doc.id });
+                }
+            // snapshot.forEach((doc) => {
+            //     msgs.push({ ...doc.data(), id: doc.id })
+            // });
             var objDiv = document.getElementById("msg_box");
             if (objDiv.scrollTop >= 0) {
-                setMessages(msgs);
+                setMessages(x);
                 await delay(100);
                 objDiv.scrollTop = objDiv.scrollHeight;
             }
-            else { setMessages(msgs); }
+            else {  setMessages(x); }
         });
         return () => {
             unsubscribe();
         };
     }, []);
 
+    async function deleteCollection(db, collectionPath, batchSize) {
+        const collectionRef = collection(db,collectionPath);
+        const delQuery = query(collectionRef, orderBy('__name__'), limit(batchSize));
+      
+        return new Promise((resolve, reject) => {
+          deleteQueryBatch(db, delQuery, resolve).catch(reject);
+        });
+      }
+
+      async function deleteQueryBatch(db, delQuery, resolve) {
+        const snapshot = await getDocs(delQuery);
+      
+        const batchSize = snapshot.size;
+        if (batchSize === 0) {
+          // When there are no documents left, we are done
+          resolve();
+          return;
+        }
+
+          // Delete documents in a batch
+  const batch = writeBatch(db);
+  snapshot.docs.forEach((doc) => {
+    batch.delete(doc.ref);
+  });
+  await batch.commit();
+
+}
+
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (newMessage === "") return;
 
-        await addDoc(messagesRef, {
+        await addDoc(msgsRef, {
             text: newMessage,
             createdAt: serverTimestamp(),
             name,
-            room,
+            room
         });
+        messages.unshift({name: name, text: newMessage});
         var objDiv = document.getElementById("msg_box");
         objDiv.scrollTop = objDiv.scrollHeight;
 
@@ -56,13 +94,15 @@ export const Chat = (props) => {
     };
 
     const settingsClick = () => {
+        console.log(x);
         if (settings === "main") { setSettings("none"); }
         else { setSettings("main"); }
     }
 
     const leaveRoomClick = (e) => {
         e.preventDefault();
-        sign_out(auth);
+        deleteCollection(db, "rooms/"+room+"/msgs", 100);
+        sign_out();
     }
 
     const confirmUser = (msg_user) => {
@@ -74,7 +114,7 @@ export const Chat = (props) => {
     return (
         <div className="chat-app">
             {settings === "none" ?
-                <div className="header">
+                <div className="form-header">
                     <FontAwesomeIcon onClick={settingsClick} className="gear-icon" icon={faGear} />
                     <FontAwesomeIcon onClick={leaveRoomClick} className="leave-room-button" icon={faRightFromBracket} flip="horizontal" />
                     <h1>{room}</h1>
