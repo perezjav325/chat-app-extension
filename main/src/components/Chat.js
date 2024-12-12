@@ -1,5 +1,5 @@
 /*global chrome*/
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   addDoc,
   collection,
@@ -10,8 +10,11 @@ import {
   orderBy,
   limit,
   getDocs,
+  doc,
+  updateDoc,
   startAfter,
   Timestamp,
+  endBefore,
 } from "firebase/firestore";
 import { db } from "../firebase-config";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -19,22 +22,28 @@ import {
   faGear,
   faRightFromBracket,
   faCaretUp,
+  faPause,
+  faPlay,
+  faRotate,
+  faBackwardFast,
 } from "@fortawesome/free-solid-svg-icons";
-import "../styles/Chat.css";
 
 export const Chat = (props) => {
-  const { room } = props;
-  const { name } = props;
-  const { sign_out } = props;
+  const { roomPath, roomName, lastResetTimestamp, name, sign_out } = props;
   //Props
 
-  const msgsRef = collection(db, `rooms/${room}/msgs`);
+  const msgsRef = collection(db, `${roomPath}/msgs`);
   //firebase reference for messages for specific room
 
   const [settings, setSettings] = useState(false);
   const [newMessage, setNewMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [incomingMsg, setIncomingMsg] = useState(null);
+  const [playbackTime, setPlaybackTime] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const intervalIdRef = useRef(null);
+  const startTimeRef = useRef(0);
 
   //states for settings panel, message box, and message list
 
@@ -49,8 +58,25 @@ export const Chat = (props) => {
   // }
 
   useEffect(() => {
+    if (isPlaying) {
+      intervalIdRef.current = setInterval(() => {
+        console.log("tick");
+        setPlaybackTime(Date.now() - startTimeRef.current);
+      }, 1000);
+    }
+    return () => {
+      clearInterval(intervalIdRef.current);
+    };
+  }, [isPlaying]);
+
+  useEffect(() => {
     const initialFetch = async () => {
-      const q = query(msgsRef, orderBy("createdAt", "desc"));
+      console.log("Fetching all since ", lastResetTimestamp);
+      const q = query(
+        msgsRef,
+        orderBy("createdAt", "desc"),
+        where("createdAt", ">=", lastResetTimestamp)
+      );
       const querySnapshot = await getDocs(q);
       const msgs = [];
       querySnapshot.forEach((doc) => {
@@ -59,9 +85,6 @@ export const Chat = (props) => {
       if (msgs.length > 0) {
         chrome.storage.local.set({ messages: msgs });
         setMessages(msgs);
-
-        // Start the real-time listener with the latest timestamp
-        const lastTime = msgs[0].createdAt;
       }
     };
 
@@ -69,7 +92,8 @@ export const Chat = (props) => {
       const q = query(
         msgsRef,
         orderBy("createdAt", "asc"),
-        startAfter(lastTimestamp)
+        where("sender", "!=", name),
+        where("createdAt", ">", lastTimestamp)
       );
       const querySnapshot = await getDocs(q);
       const newMessages = [];
@@ -81,11 +105,22 @@ export const Chat = (props) => {
         const updatedMessages = [...newMessages, ...cachedMessages];
         chrome.storage.local.set({ messages: updatedMessages });
         setMessages(updatedMessages);
-
-        // Update lastTimestamp
-        const lastTime = newMessages[newMessages.length - 1].createdAt;
       }
     };
+
+    const roomRef = doc(db, roomPath);
+    // Listen for the video time from the content script
+    chrome.runtime.onMessage.addListener((message) => {
+      if (message.action === "currentTime") {
+        console.log("Current video time received:", message.currentTime);
+
+        // Send the time to Firestore
+        updateDoc(roomRef, {
+          currentTime: message.currentTime,
+          state: "sync",
+        });
+      }
+    });
 
     // Initialize workflow
     chrome.storage.local.get("messages").then((result) => {
@@ -93,6 +128,7 @@ export const Chat = (props) => {
       setMessages(cachedMessages);
 
       if (cachedMessages.length > 0) {
+        console.log("Cache", cachedMessages);
         // Use last cached message timestamp
         const lastTime = cachedMessages[0].createdAt;
         const lastTimestamp = new Timestamp(
@@ -107,10 +143,40 @@ export const Chat = (props) => {
     });
     const q = query(
       msgsRef,
-      where("name", "!=", name),
+      where("sender", "!=", name),
+      where("createdAt", ">=", Timestamp.now()),
       orderBy("createdAt", "desc"),
       limit(1)
     );
+    const timeSync = onSnapshot(roomRef, (docSnapshot) => {
+      if (docSnapshot.exists()) {
+        const data = docSnapshot.data();
+        console.log("Sync update from Firestore:", data);
+
+        if (data.state === "sync") {
+          // Adjust follower's playback to match the leader
+          chrome.runtime.connect({ name: "sidebar" }).postMessage({
+            action: "adjustPlayback",
+            currentTime: data.currentTime,
+          });
+          setPlaybackTime(data.currentTime);
+        }
+        if (data.state === "play") {
+          chrome.runtime.connect({ name: "sidebar" }).postMessage({
+            action: "playbackCommand",
+            state: "play",
+          });
+          setIsPlaying(true);
+        }
+        if (data.state === "pause") {
+          chrome.runtime.connect({ name: "sidebar" }).postMessage({
+            action: "playbackCommand",
+            state: "pause",
+          });
+          setIsPlaying(false);
+        }
+      }
+    });
 
     const unsub = onSnapshot(q, (snapshot) => {
       if (snapshot.size > 0) {
@@ -118,14 +184,17 @@ export const Chat = (props) => {
         setIncomingMsg({ id: doc.id, ...doc.data() });
       }
     });
-    return () => unsub();
+    return () => {
+      unsub();
+      timeSync();
+    };
   }, []);
 
   useEffect(() => {
     if (incomingMsg) {
       const lastRecieved = messages.findIndex((msg) => msg.name !== name);
-      console.log(lastRecieved);
       if (lastRecieved === -1 || messages[lastRecieved].id !== incomingMsg.id) {
+        console.log("Live fetch ", incomingMsg);
         setMessages([incomingMsg, ...messages]);
         chrome.storage.local.set({ messages: [incomingMsg, ...messages] });
       }
@@ -139,22 +208,21 @@ export const Chat = (props) => {
     const newDoc = await addDoc(msgsRef, {
       text: newMessage,
       createdAt: serverTimestamp(),
-      name,
-      room,
+      sender: name,
     });
     setNewMessage("");
     const timestamp = Timestamp.now();
     setMessages([
-      { id: newDoc.id, text: newMessage, name: name, createdAt: timestamp },
+      { id: newDoc.id, text: newMessage, sender: name, createdAt: timestamp },
       ...messages,
     ]);
-    let objDiv = document.getElementById("msg_box"); //ID NEEDS RENAMING
+    let objDiv = document.getElementById("msg_box");
     objDiv.scrollTop = objDiv.scrollHeight;
     chrome.storage.local.set({
       messages: [
         {
           id: newDoc.id,
-          name: name,
+          sender: name,
           text: newMessage,
           createdAt: timestamp,
         },
@@ -165,6 +233,7 @@ export const Chat = (props) => {
   //adds new message to db and to message list, scrolls page down and resets text field
 
   const settingsClick = () => {
+    chrome.storage.local.get("messages").then((res) => console.log(res));
     setSettings((prev) => !prev);
   };
   //opens and closes settings panel
@@ -181,9 +250,56 @@ export const Chat = (props) => {
   };
   const showName = (msg_name, index) => {
     if (index === messages.length) return true;
-    return msg_name !== messages[index + 1]?.name;
+    return msg_name !== messages[index + 1]?.sender;
   };
   //determines id of name label which determines its color
+
+  // Function to send play or pause commands
+  const sendCommand = async (command) => {
+    const x = command ? "pause" : "play";
+    chrome.runtime.connect({ name: "sidebar" }).postMessage({
+      action: "playbackCommand",
+      state: x,
+    });
+    const roomRef = doc(db, roomPath);
+    await updateDoc(roomRef, {
+      state: x,
+    });
+    setIsPlaying(!command);
+    if (command) syncVideoTime();
+    else {
+      startTimeRef.current = Date.now() - playbackTime;
+    }
+  };
+
+  // Function to send the current video time to Firestore
+  const syncVideoTime = () => {
+    chrome.runtime
+      .connect({ name: "sidebar" })
+      .postMessage({ action: "getCurrentTime" });
+  };
+
+  const restartVideoTime = () => {
+    const roomRef = doc(db, roomPath);
+    // Send the time 0 to Firestore
+    updateDoc(roomRef, {
+      currentTime: 0,
+      state: "sync",
+    });
+  };
+
+  const formatTime = () => {
+    let hours = Math.floor(playbackTime / (1000 * 60 * 60));
+    let minutes = Math.floor((playbackTime / (1000 * 60)) % 60);
+    let seconds = Math.floor((playbackTime / 1000) % 60);
+    // let millis = Math.floor((elapsedTime % 1000) / 10);
+
+    hours = String(hours).padStart(2, "0");
+    minutes = String(minutes).padStart(2, "0");
+    seconds = String(seconds).padStart(2, "0");
+
+    return `${hours}:${minutes}:${seconds}`;
+  };
 
   return (
     <div className="content-center items-center border-none flex flex-col h-full overflow-hidden">
@@ -201,7 +317,33 @@ export const Chat = (props) => {
               icon={faRightFromBracket}
             />
           </div>
-          <h1 className="text-[greenyellow] font-bold text-2xl">{room}</h1>
+          <h1 className="text-[greenyellow] font-bold text-2xl">{roomName}</h1>
+          <div className="text-white">{formatTime()}</div>
+
+          <div className="flex flex-row items-center gap-x-2">
+            <button
+              className="btn-primary-circle size-5"
+              onClick={() => restartVideoTime()}
+            >
+              <FontAwesomeIcon icon={faBackwardFast} color="black" />
+            </button>
+            <button
+              className="btn-primary-circle size-8"
+              onClick={() => sendCommand(isPlaying)}
+            >
+              {isPlaying ? (
+                <FontAwesomeIcon icon={faPause} />
+              ) : (
+                <FontAwesomeIcon icon={faPlay} />
+              )}
+            </button>
+            <button
+              className="btn-primary-circle size-5"
+              onClick={() => syncVideoTime()}
+            >
+              <FontAwesomeIcon icon={faRotate} color="black" />
+            </button>
+          </div>
         </div>
       ) : (
         <div className="header" id={settings}>
@@ -218,8 +360,8 @@ export const Chat = (props) => {
       )}
       <div className="messages-box scrollbar" id="msg_box">
         {messages.map((message, index) => {
-          const isMe = isUser(message.name);
-          const topMessage = showName(message.name, index);
+          const isMe = isUser(message.sender);
+          const topMessage = showName(message.sender, index);
           return (
             <div
               className={`
@@ -232,8 +374,12 @@ export const Chat = (props) => {
                   isMe && "items-end"
                 } flex flex-col text-xs`}
               >
-                <div className={`${isMe ? "mr-2" : "ml-2"} font-medium `}>
-                  {topMessage && message.name}
+                <div
+                  className={`${isMe ? "mr-2" : "ml-2"} ${
+                    topMessage && "mb-1"
+                  } font-medium`}
+                >
+                  {topMessage && message.sender}
                 </div>
                 <div
                   className={`${

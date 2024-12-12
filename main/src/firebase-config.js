@@ -1,7 +1,7 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
-import { getFirestore } from 'firebase/firestore';
-import {getAuth, onAuthStateChanged, signInAnonymously } from 'firebase/auth';
+import { getFirestore } from "firebase/firestore";
+import { getAuth, onAuthStateChanged, signInAnonymously } from "firebase/auth";
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -12,23 +12,15 @@ const firebaseConfig = {
   projectId: "chat-app-a52d5",
   storageBucket: "chat-app-a52d5.appspot.com",
   messagingSenderId: "646452076642",
-  appId: "1:646452076642:web:d3e6ac86762583157bf13b"
+  appId: "1:646452076642:web:d3e6ac86762583157bf13b",
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const auth = getAuth();
+export const auth = getAuth();
 
-export const checkIn = () => {
-  onAuthStateChanged(auth, (user) => {
-    if(user){
-      console.log("logged in");
-    }
-    else{
-      signInAnonymously(auth);
-    }
-  })
-}
-
+export const checkIn = async () => {
+  return auth.currentUser || (await signInAnonymously(auth)).user;
+};
 
 export const db = getFirestore(app);

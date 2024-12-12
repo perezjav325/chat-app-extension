@@ -4,13 +4,16 @@
 
 @layer components {
   .btn-primary {
-    @apply bg-[greenyellow] hover:bg-[#74ac1f] shadow-md  rounded-3xl border-none font-bold text-black py-1 px-2;
+    @apply bg-[greenyellow] hover:bg-[#74ac1f] rounded-3xl border-none font-bold text-black py-1 px-2;
+  }
+  .btn-primary-circle {
+    @apply bg-[greenyellow] hover:bg-[#74ac1f] rounded-full border-none font-bold text-black;
   }
   .input-info {
     @apply bg-zinc-600 outline-none rounded-md font-medium text-white p-1
   }
   .header{
-    @apply w-full h-24 flex flex-col text-center items-center bg-black text-white py-1.5 px-3
+    @apply w-full flex flex-col text-center items-center bg-black text-white py-1.5 px-3
   }
   .messages-box{
     @apply w-full h-full overflow-y-auto text-sm bg-[linear-gradient(to_right_bottom,rgba(0,0,0,0.8),rgba(0,0,0,0.4)),url('../public/stars.jpg')]
